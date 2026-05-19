@@ -123,7 +123,7 @@ export default function AdminPage() {
       const res = await fetch('/api/notifications', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eventId }) });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      showToast(`Sent: ${data.email} email(s), ${data.whatsapp} WhatsApp(s)`, 'success');
+      showToast(`Sent: ${data.email} email(s)${data.lark ? ', Lark notified' : ''}`, 'success');
       const logRes = await fetch('/api/notifications/log');
       setLogs(await logRes.json());
     } catch {
@@ -246,7 +246,7 @@ export default function AdminPage() {
                             {ev.category}
                           </span>
                         </td>
-                        <td style={{ fontSize: 12 }}>{ev.emailNotif ? '✉ ' : ''}{ev.waNotif ? '💬' : ''}</td>
+                        <td style={{ fontSize: 12 }}>{ev.emailNotif ? '✉ ' : ''}{ev.waNotif ? '🐦 Lark' : ''}</td>
                         <td>
                           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                             <button className="ch-btn-ghost ch-btn-sm" onClick={() => startEdit(ev)}>Edit</button>
@@ -307,7 +307,7 @@ export default function AdminPage() {
                       <input type="checkbox" checked={form.emailNotif} onChange={e => setForm(f => ({ ...f, emailNotif: e.target.checked }))} style={{ accentColor: '#c8973a' }} /> Email
                     </label>
                     <label style={{ fontSize: 11, color: 'rgba(232,224,208,0.5)', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontFamily: 'Space Mono,monospace', letterSpacing: 1 }}>
-                      <input type="checkbox" checked={form.waNotif} onChange={e => setForm(f => ({ ...f, waNotif: e.target.checked }))} style={{ accentColor: '#c8973a' }} /> WhatsApp
+                      <input type="checkbox" checked={form.waNotif} onChange={e => setForm(f => ({ ...f, waNotif: e.target.checked }))} style={{ accentColor: '#c8973a' }} /> Lark
                     </label>
                   </div>
                 </div>

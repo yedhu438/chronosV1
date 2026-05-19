@@ -70,7 +70,7 @@ export async function sendEventEmail({
   `;
 
   await transporter.sendMail({
-    from: process.env.SMTP_FROM || 'FullyMerched Chronos <noreply@fullymerched.com>',
+    from: process.env.SMTP_FROM || 'FullyMerched Chronos <yedhu@fullymerched.com>',
     to,
     subject,
     html,
