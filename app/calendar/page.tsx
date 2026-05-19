@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Navbar } from '@/components/Navbar';
 import { ChronosEvent, CATS } from '@/types';
 
@@ -8,6 +9,8 @@ const WD = ['S','M','T','W','T','F','S'];
 
 export default function CalendarPage() {
   const [events, setEvents] = useState<ChronosEvent[]>([]);
+  const [calendarEditEnabled, setCalendarEditEnabled] = useState(false);
+  const router = useRouter();
   const now = new Date();
   const [yr, setYr] = useState(now.getFullYear());
   const [mo, setMo] = useState(now.getMonth());
@@ -15,6 +18,7 @@ export default function CalendarPage() {
 
   useEffect(() => {
     fetch('/api/events').then(r => r.json()).then(setEvents);
+    fetch('/api/settings').then(r => r.json()).then(d => setCalendarEditEnabled(d.calendarEditEnabled));
   }, []);
 
   function chMo(d: number) {
@@ -108,7 +112,17 @@ export default function CalendarPage() {
                 ) : (
                   selEvs.map(ev => (
                     <div key={ev.id} style={{ borderLeft: `2px solid ${CATS[ev.category]?.c || '#c8973a'}`, paddingLeft: 16, marginBottom: 24 }}>
-                      <div style={{ fontFamily: 'Playfair Display,serif', fontSize: 20, fontWeight: 700, color: '#fff', marginBottom: 4, fontStyle: 'italic' }}>{ev.name}</div>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                        <div style={{ fontFamily: 'Playfair Display,serif', fontSize: 20, fontWeight: 700, color: '#fff', marginBottom: 4, fontStyle: 'italic' }}>{ev.name}</div>
+                        {calendarEditEnabled && (
+                          <button
+                            onClick={() => router.push(`/admin?edit=${ev.id}`)}
+                            style={{ flexShrink: 0, fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', fontFamily: 'Space Mono,monospace', color: 'rgba(200,151,58,0.7)', border: '1px solid rgba(200,151,58,0.2)', background: 'transparent', padding: '4px 10px', cursor: 'pointer' }}
+                          >
+                            Edit
+                          </button>
+                        )}
+                      </div>
                       <div style={{ fontSize: 10, letterSpacing: 2, color: 'rgba(200,151,58,0.6)', fontFamily: 'Space Mono,monospace', marginBottom: 8 }}>⊙ {ev.time}</div>
                       <div style={{ fontSize: 13, color: 'rgba(232,224,208,0.4)', lineHeight: 1.5 }}>{ev.desc}</div>
                     </div>

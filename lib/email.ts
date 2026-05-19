@@ -1,11 +1,11 @@
 import nodemailer from 'nodemailer';
 
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: Number(process.env.SMTP_PORT) || 587,
-  secure: false,
+  host: process.env.SMTP_HOST || 'send.one.com',
+  port: Number(process.env.SMTP_PORT) || 465,
+  secure: Number(process.env.SMTP_PORT || 465) === 465,
   auth: {
-    user: process.env.SMTP_USER,
+    user: process.env.SMTP_USER || 'yedhu@fullymerched.com',
     pass: process.env.SMTP_PASS,
   },
 });
@@ -16,13 +16,25 @@ export async function sendEventEmail({
   eventName,
   eventDate,
   eventDesc,
+  daysUntil,
 }: {
   to: string;
   name: string;
   eventName: string;
   eventDate: string;
   eventDesc: string;
+  daysUntil?: 20 | 7;
 }) {
+  const eyebrow =
+    daysUntil === 20 ? '20-Day Reminder' :
+    daysUntil === 7  ? 'Final Week Reminder' :
+    'Event Reminder';
+
+  const subject =
+    daysUntil === 20 ? `📅 Coming Up in 20 Days: ${eventName}` :
+    daysUntil === 7  ? `⚡ Final Week: ${eventName}` :
+    `📅 Upcoming: ${eventName}`;
+
   const html = `
     <!DOCTYPE html>
     <html>
@@ -46,7 +58,7 @@ export async function sendEventEmail({
           <div class="logo">FullyMerched Chronos</div>
         </div>
         <div class="body">
-          <div class="eyebrow">Event Reminder</div>
+          <div class="eyebrow">${eyebrow}</div>
           <div class="title">${eventName}</div>
           <div class="date">📅 ${eventDate}</div>
           <div class="desc">Hi ${name},<br/><br/>${eventDesc}</div>
@@ -60,7 +72,7 @@ export async function sendEventEmail({
   await transporter.sendMail({
     from: process.env.SMTP_FROM || 'FullyMerched Chronos <noreply@fullymerched.com>',
     to,
-    subject: `📅 Upcoming: ${eventName}`,
+    subject,
     html,
   });
 }
