@@ -8,7 +8,7 @@ import { ChronosEvent, Subscriber, NotifLog, CATS } from '@/types';
 
 type AdminTab = 'events' | 'add' | 'subs' | 'log' | 'settings';
 
-const EMPTY_FORM = { name: '', date: '', time: '09:00', category: 'launch', desc: '', emailNotif: true, waNotif: true };
+const EMPTY_FORM = { name: '', date: '', time: '09:00', category: 'launch', desc: '', links: [] as string[], emailNotif: true, waNotif: true };
 
 export default function AdminPage() {
   const { data: session, status } = useSession();
@@ -45,7 +45,7 @@ export default function AdminPage() {
           const ev = evs.find(e => e.id === Number(editParam));
           if (ev) {
             setEditId(ev.id);
-            setForm({ name: ev.name, date: ev.date, time: ev.time, category: ev.category, desc: ev.desc, emailNotif: ev.emailNotif, waNotif: ev.waNotif });
+            setForm({ name: ev.name, date: ev.date, time: ev.time, category: ev.category, desc: ev.desc, links: ev.links ?? [], emailNotif: ev.emailNotif, waNotif: ev.waNotif });
             setTab('add');
             router.replace('/admin');
           }
@@ -98,7 +98,7 @@ export default function AdminPage() {
 
   function startEdit(ev: ChronosEvent) {
     setEditId(ev.id);
-    setForm({ name: ev.name, date: ev.date, time: ev.time, category: ev.category, desc: ev.desc, emailNotif: ev.emailNotif, waNotif: ev.waNotif });
+    setForm({ name: ev.name, date: ev.date, time: ev.time, category: ev.category, desc: ev.desc, links: ev.links ?? [], emailNotif: ev.emailNotif, waNotif: ev.waNotif });
     setTab('add');
   }
 
@@ -299,6 +299,29 @@ export default function AdminPage() {
                 <div className="ch-form-group">
                   <label className="ch-form-label">Description</label>
                   <textarea className="ch-form-input" value={form.desc} onChange={e => setForm(f => ({ ...f, desc: e.target.value }))} style={{ resize: 'vertical', minHeight: 80 }} placeholder="Event description..." />
+                </div>
+                <div className="ch-form-group">
+                  <label className="ch-form-label">Product Links</label>
+                  {form.links.map((link, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                      <input
+                        className="ch-form-input"
+                        value={link}
+                        onChange={e => setForm(f => { const l = [...f.links]; l[i] = e.target.value; return { ...f, links: l }; })}
+                        placeholder="https://..."
+                        style={{ flex: 1 }}
+                      />
+                      <button
+                        className="ch-btn-danger ch-btn-sm"
+                        onClick={() => setForm(f => ({ ...f, links: f.links.filter((_, j) => j !== i) }))}
+                        style={{ flexShrink: 0 }}
+                      >✕</button>
+                    </div>
+                  ))}
+                  <button
+                    className="ch-btn-ghost ch-btn-sm"
+                    onClick={() => setForm(f => ({ ...f, links: [...f.links, ''] }))}
+                  >+ Add Link</button>
                 </div>
                 <div className="ch-form-group">
                   <label className="ch-form-label">Notifications</label>

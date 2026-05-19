@@ -7,6 +7,7 @@ export interface ChronosEvent {
   time: string;
   category: EventCategory;
   desc: string;
+  links: string[];
   emailNotif: boolean;
   waNotif: boolean;
   createdAt?: string;

@@ -36,6 +36,7 @@ async function getDB() {
 function migrate(database: import('sql.js').Database) {
   try { database.run('ALTER TABLE events ADD COLUMN reminder20Sent INTEGER NOT NULL DEFAULT 0'); } catch {}
   try { database.run('ALTER TABLE events ADD COLUMN reminder7Sent  INTEGER NOT NULL DEFAULT 0'); } catch {}
+  try { database.run("ALTER TABLE events ADD COLUMN links TEXT NOT NULL DEFAULT '[]'"); } catch {}
   database.run(`
     CREATE TABLE IF NOT EXISTS settings (
       key   TEXT PRIMARY KEY,
@@ -61,6 +62,7 @@ function createSchema(database: import('sql.js').Database) {
       time           TEXT    NOT NULL DEFAULT '09:00',
       category       TEXT    NOT NULL DEFAULT 'launch',
       desc           TEXT    NOT NULL DEFAULT '',
+      links          TEXT    NOT NULL DEFAULT '[]',
       emailNotif     INTEGER NOT NULL DEFAULT 1,
       waNotif        INTEGER NOT NULL DEFAULT 1,
       reminder20Sent INTEGER NOT NULL DEFAULT 0,
@@ -115,13 +117,13 @@ export async function getAllEvents() {
 
 export async function createEvent(data: {
   name: string; date: string; time: string; category: string;
-  desc: string; emailNotif: boolean; waNotif: boolean;
+  desc: string; links: string[]; emailNotif: boolean; waNotif: boolean;
 }) {
   const database = await getDB();
   database.run(
-    `INSERT INTO events (name, date, time, category, desc, emailNotif, waNotif)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [data.name, data.date, data.time, data.category, data.desc, data.emailNotif ? 1 : 0, data.waNotif ? 1 : 0]
+    `INSERT INTO events (name, date, time, category, desc, links, emailNotif, waNotif)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [data.name, data.date, data.time, data.category, data.desc, JSON.stringify(data.links ?? []), data.emailNotif ? 1 : 0, data.waNotif ? 1 : 0]
   );
   const newId = (database.exec('SELECT last_insert_rowid() AS id')[0].values[0][0]) as number;
   persist(database);
@@ -131,11 +133,13 @@ export async function createEvent(data: {
 
 export async function updateEvent(id: number, data: Partial<{
   name: string; date: string; time: string; category: string;
-  desc: string; emailNotif: boolean; waNotif: boolean;
+  desc: string; links: string[]; emailNotif: boolean; waNotif: boolean;
 }>) {
   const database = await getDB();
   const fields = Object.keys(data).map(k => `${k} = ?`).join(', ');
-  const values = Object.values(data).map(v => typeof v === 'boolean' ? (v ? 1 : 0) : v);
+  const values = Object.values(data).map(v =>
+    Array.isArray(v) ? JSON.stringify(v) : typeof v === 'boolean' ? (v ? 1 : 0) : v
+  );
   database.run(`UPDATE events SET ${fields} WHERE id = ?`, [...values, id]);
   persist(database);
 }
@@ -239,6 +243,8 @@ function rowsToObjects(result: import('sql.js').QueryExecResult) {
       // Convert 0/1 integers back to booleans for known boolean columns
       if ((col === 'emailNotif' || col === 'waNotif') && typeof val === 'number') {
         obj[col] = val === 1;
+      } else if (col === 'links') {
+        try { obj[col] = JSON.parse(val as string); } catch { obj[col] = []; }
       } else {
         obj[col] = val;
       }
