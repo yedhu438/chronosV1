@@ -1,16 +1,19 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { useSession, signIn } from 'next-auth/react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Navbar } from '@/components/Navbar';
 import { Toast } from '@/components/Toast';
 import { ChronosEvent, Subscriber, NotifLog, CATS } from '@/types';
 
-type AdminTab = 'events' | 'add' | 'subs' | 'log';
+type AdminTab = 'events' | 'add' | 'subs' | 'log' | 'settings';
 
 const EMPTY_FORM = { name: '', date: '', time: '09:00', category: 'launch', desc: '', emailNotif: true, waNotif: true };
 
 export default function AdminPage() {
   const { data: session, status } = useSession();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [loginUser, setLoginUser] = useState('');
   const [loginPass, setLoginPass] = useState('');
   const [loginErr, setLoginErr] = useState(false);
@@ -25,6 +28,8 @@ export default function AdminPage() {
   const [sf, setSf] = useState({ name: '', email: '', phone: '' });
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
   const [sending, setSending] = useState<number | null>(null);
+  const [calendarEditEnabled, setCalendarEditEnabled] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
 
   const showToast = useCallback((message: string, type: 'success' | 'info' | 'error' = 'info') => {
     setToast({ message, type });
@@ -32,11 +37,33 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (session) {
-      fetch('/api/events').then(r => r.json()).then(setEvents);
+      fetch('/api/events').then(r => r.json()).then((evs: ChronosEvent[]) => {
+        setEvents(evs);
+        // If redirected from calendar with ?edit=<id>, open that event
+        const editParam = searchParams.get('edit');
+        if (editParam) {
+          const ev = evs.find(e => e.id === Number(editParam));
+          if (ev) {
+            setEditId(ev.id);
+            setForm({ name: ev.name, date: ev.date, time: ev.time, category: ev.category, desc: ev.desc, emailNotif: ev.emailNotif, waNotif: ev.waNotif });
+            setTab('add');
+            router.replace('/admin');
+          }
+        }
+      });
       fetch('/api/subscribers').then(r => r.json()).then(setSubs);
       fetch('/api/notifications/log').then(r => r.json()).then(setLogs);
+      fetch('/api/settings').then(r => r.json()).then(d => setCalendarEditEnabled(d.calendarEditEnabled));
     }
-  }, [session]);
+  }, [session, searchParams, router]);
+
+  async function toggleCalendarEdit(val: boolean) {
+    setSettingsSaving(true);
+    await fetch('/api/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendarEditEnabled: val }) });
+    setCalendarEditEnabled(val);
+    setSettingsSaving(false);
+    showToast(`Calendar editing ${val ? 'enabled' : 'disabled'}`, 'success');
+  }
 
   async function handleLogin() {
     setLoginLoading(true);
@@ -184,7 +211,7 @@ export default function AdminPage() {
                 <div className="ch-side-role">Super Admin</div>
               </div>
             </div>
-            {([['events', '01  Events'], ['add', '02  Add Event'], ['subs', '03  Subscribers'], ['log', '04  Notif Log']] as [AdminTab, string][]).map(([t, l]) => (
+            {([['events', '01  Events'], ['add', '02  Add Event'], ['subs', '03  Employees'], ['log', '04  Notif Log'], ['settings', '05  Settings']] as [AdminTab, string][]).map(([t, l]) => (
               <button
                 key={t}
                 className={`ch-side-link${tab === t ? ' active' : ''}`}
@@ -294,7 +321,7 @@ export default function AdminPage() {
             {/* ── Subscribers ── */}
             {tab === 'subs' && (
               <>
-                <div style={{ fontFamily: 'Playfair Display,serif', fontSize: 24, fontWeight: 700, color: '#fff', fontStyle: 'italic', marginBottom: 24 }}>Subscribers</div>
+                <div style={{ fontFamily: 'Playfair Display,serif', fontSize: 24, fontWeight: 700, color: '#fff', fontStyle: 'italic', marginBottom: 24 }}>Employees</div>
                 <div style={{ background: 'rgba(200,151,58,0.04)', border: '1px solid rgba(200,151,58,0.1)', padding: 20, marginBottom: 24 }}>
                   <div style={{ fontSize: 9, letterSpacing: 3, color: 'rgba(200,151,58,0.5)', textTransform: 'uppercase', fontFamily: 'Space Mono,monospace', marginBottom: 16 }}>Add Subscriber</div>
                   <div className="ch-form-row" style={{ marginBottom: 12 }}>
@@ -343,6 +370,51 @@ export default function AdminPage() {
                   </div>
                 ))}
                 {logs.length === 0 && <div style={{ color: 'rgba(255,255,255,0.2)', fontFamily: 'Playfair Display,serif', fontSize: 14, fontStyle: 'italic' }}>No notifications sent yet.</div>}
+              </>
+            )}
+
+            {/* ── Settings ── */}
+            {tab === 'settings' && (
+              <>
+                <div style={{ fontFamily: 'Playfair Display,serif', fontSize: 24, fontWeight: 700, color: '#fff', fontStyle: 'italic', marginBottom: 24 }}>Settings</div>
+                <div style={{ background: 'rgba(200,151,58,0.04)', border: '1px solid rgba(200,151,58,0.1)', padding: 28, maxWidth: 480 }}>
+                  <div style={{ fontSize: 9, letterSpacing: 3, color: 'rgba(200,151,58,0.5)', textTransform: 'uppercase', fontFamily: 'Space Mono,monospace', marginBottom: 20 }}>Calendar Access</div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24 }}>
+                    <div>
+                      <div style={{ fontSize: 14, color: '#e8e0d0', fontWeight: 500, marginBottom: 6 }}>Calendar Edit Mode</div>
+                      <div style={{ fontSize: 11, color: 'rgba(232,224,208,0.35)', lineHeight: 1.5, fontFamily: 'Space Mono,monospace' }}>
+                        When enabled, an Edit button appears on events in the calendar so you can edit them directly.
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => toggleCalendarEdit(!calendarEditEnabled)}
+                      disabled={settingsSaving}
+                      style={{
+                        flexShrink: 0,
+                        width: 52, height: 28,
+                        borderRadius: 14,
+                        border: 'none',
+                        background: calendarEditEnabled ? '#c8973a' : 'rgba(255,255,255,0.1)',
+                        cursor: settingsSaving ? 'not-allowed' : 'pointer',
+                        opacity: settingsSaving ? 0.5 : 1,
+                        transition: 'background 0.2s',
+                        position: 'relative',
+                      }}
+                    >
+                      <span style={{
+                        position: 'absolute',
+                        top: 4, left: calendarEditEnabled ? 28 : 4,
+                        width: 20, height: 20,
+                        borderRadius: '50%',
+                        background: '#fff',
+                        transition: 'left 0.2s',
+                      }} />
+                    </button>
+                  </div>
+                  <div style={{ marginTop: 16, fontSize: 10, fontFamily: 'Space Mono,monospace', letterSpacing: 2, color: calendarEditEnabled ? 'rgba(100,200,100,0.6)' : 'rgba(255,255,255,0.15)', textTransform: 'uppercase' }}>
+                    {calendarEditEnabled ? 'Editing enabled' : 'View only'}
+                  </div>
+                </div>
               </>
             )}
 

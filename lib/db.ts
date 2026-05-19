@@ -21,6 +21,7 @@ async function getDB() {
   if (fs.existsSync(DB_PATH)) {
     const fileBuffer = fs.readFileSync(DB_PATH);
     db = new SQL.Database(fileBuffer);
+    migrate(db);
   } else {
     db = new SQL.Database();
     createSchema(db);
@@ -29,6 +30,20 @@ async function getDB() {
   }
 
   return db;
+}
+
+// Adds columns/tables introduced after the initial schema to existing DBs
+function migrate(database: import('sql.js').Database) {
+  try { database.run('ALTER TABLE events ADD COLUMN reminder20Sent INTEGER NOT NULL DEFAULT 0'); } catch {}
+  try { database.run('ALTER TABLE events ADD COLUMN reminder7Sent  INTEGER NOT NULL DEFAULT 0'); } catch {}
+  database.run(`
+    CREATE TABLE IF NOT EXISTS settings (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL DEFAULT ''
+    );
+  `);
+  database.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('calendarEditEnabled', 'false')`);
+  persist(database);
 }
 
 function persist(database: import('sql.js').Database) {
@@ -40,15 +55,17 @@ function persist(database: import('sql.js').Database) {
 function createSchema(database: import('sql.js').Database) {
   database.run(`
     CREATE TABLE IF NOT EXISTS events (
-      id         INTEGER PRIMARY KEY AUTOINCREMENT,
-      name       TEXT    NOT NULL,
-      date       TEXT    NOT NULL,
-      time       TEXT    NOT NULL DEFAULT '09:00',
-      category   TEXT    NOT NULL DEFAULT 'launch',
-      desc       TEXT    NOT NULL DEFAULT '',
-      emailNotif INTEGER NOT NULL DEFAULT 1,
-      waNotif    INTEGER NOT NULL DEFAULT 1,
-      createdAt  TEXT    NOT NULL DEFAULT (datetime('now'))
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      name           TEXT    NOT NULL,
+      date           TEXT    NOT NULL,
+      time           TEXT    NOT NULL DEFAULT '09:00',
+      category       TEXT    NOT NULL DEFAULT 'launch',
+      desc           TEXT    NOT NULL DEFAULT '',
+      emailNotif     INTEGER NOT NULL DEFAULT 1,
+      waNotif        INTEGER NOT NULL DEFAULT 1,
+      reminder20Sent INTEGER NOT NULL DEFAULT 0,
+      reminder7Sent  INTEGER NOT NULL DEFAULT 0,
+      createdAt      TEXT    NOT NULL DEFAULT (datetime('now'))
     );
 
     CREATE TABLE IF NOT EXISTS subscribers (
@@ -67,7 +84,13 @@ function createSchema(database: import('sql.js').Database) {
       status         TEXT NOT NULL DEFAULT 'delivered',
       sentAt         TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS settings (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL DEFAULT ''
+    );
   `);
+  database.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('calendarEditEnabled', 'false')`);
 }
 
 function seedData(database: import('sql.js').Database) {
@@ -100,8 +123,9 @@ export async function createEvent(data: {
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [data.name, data.date, data.time, data.category, data.desc, data.emailNotif ? 1 : 0, data.waNotif ? 1 : 0]
   );
+  const newId = (database.exec('SELECT last_insert_rowid() AS id')[0].values[0][0]) as number;
   persist(database);
-  const result = database.exec('SELECT * FROM events WHERE id = last_insert_rowid()');
+  const result = database.exec(`SELECT * FROM events WHERE id = ${newId}`);
   return rowsToObjects(result[0])[0];
 }
 
@@ -163,6 +187,45 @@ export async function createLog(data: {
     'INSERT INTO notif_log (subscriberName, eventName, channel, status) VALUES (?, ?, ?, ?)',
     [data.subscriberName, data.eventName, data.channel, data.status]
   );
+  persist(database);
+}
+
+// ── Reminders ────────────────────────────────────────────────────────────────
+
+export async function getEventsDueForReminder(daysUntil: 20 | 7) {
+  const database = await getDB();
+  const target = new Date();
+  target.setDate(target.getDate() + daysUntil);
+  const dateStr = target.toISOString().split('T')[0];
+  const col = daysUntil === 20 ? 'reminder20Sent' : 'reminder7Sent';
+  const result = database.exec(
+    `SELECT * FROM events WHERE date = '${dateStr}' AND ${col} = 0 AND emailNotif = 1`
+  );
+  if (!result.length) return [];
+  return rowsToObjects(result[0]);
+}
+
+export async function markReminderSent(id: number, which: 20 | 7) {
+  const database = await getDB();
+  const col = which === 20 ? 'reminder20Sent' : 'reminder7Sent';
+  database.run(`UPDATE events SET ${col} = 1 WHERE id = ?`, [id]);
+  persist(database);
+}
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+
+export async function getSetting(key: string): Promise<string> {
+  const database = await getDB();
+  const stmt = database.prepare('SELECT value FROM settings WHERE key = ?');
+  stmt.bind([key]);
+  const row = stmt.step() ? stmt.getAsObject() : null;
+  stmt.free();
+  return row ? (row.value as string) : '';
+}
+
+export async function setSetting(key: string, value: string) {
+  const database = await getDB();
+  database.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [key, value]);
   persist(database);
 }
 
