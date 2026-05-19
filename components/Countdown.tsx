@@ -15,9 +15,10 @@ function getCountdown(date: string, time: string) {
 }
 
 export function Countdown({ date, time }: { date: string; time: string }) {
-  const [cd, setCd] = useState(() => getCountdown(date, time));
+  const [cd, setCd] = useState<ReturnType<typeof getCountdown> | null>(null);
 
   useEffect(() => {
+    setCd(getCountdown(date, time));
     const iv = setInterval(() => setCd(getCountdown(date, time)), 1000);
     return () => clearInterval(iv);
   }, [date, time]);
